@@ -143,9 +143,7 @@ if [[ "$IS_LOCAL" == "false" ]]; then
             find "$TMP_RECOVERY_DIR" -name "*.md" -type f | while read -r backup_file; do
                 relative_path="${backup_file#$TMP_RECOVERY_DIR/}"
                 target_file="$JRNL_SYNC/$relative_path"
-                
                 mkdir -p "$(dirname "$target_file")"
-
                 if [ -f "$target_file" ]; then
                     echo -e "\n--- [Recovered Content $(date +'%Y-%m-%d %H:%M:%S')] ---\n" >> "$target_file"
                     cat "$backup_file" >> "$target_file"
@@ -160,7 +158,6 @@ if [[ "$IS_LOCAL" == "false" ]]; then
             echo -e "${RED}自愈失败：无法连接到 GitHub。已保留原始本地文件。${NC}"
             exit 1
         fi
-
     elif [ ! -d "$JRNL_SYNC" ]; then
         echo -e "${BLUE}>>> 正在同步云端环境...${NC}"
         if gh repo view Journal >/dev/null 2>&1; then
@@ -171,9 +168,7 @@ if [[ "$IS_LOCAL" == "false" ]]; then
             (
                 cd "$JRNL_SYNC" || exit 1
                 git init -b main
-                # 修复：生成一个空的初始提交，以建立 HEAD 引用
                 git commit --allow-empty -m "Initial commit"
-                # 修复：创建远端仓库时带上 --push 参数，直接将初始提交推至远端
                 gh repo create Journal --private --source=. --remote=origin --push
             ) >/dev/null 2>&1
         fi
@@ -190,7 +185,6 @@ MONTH=$(date +'%m')
 CURRENT_DATE=$(date +'%Y-%m-%d'); CURRENT_TIME=$(date +'%H:%M:%S')
 TARGET_DIR="${TARGET_BASE}/${YEAR}/${MONTH}"
 
-# 修复：显式判断字符串值，避免 bash 参数扩展判断非空字符串永远为真的陷阱
 FILE_SUFFIX=""
 [[ "$IS_LOCAL" == "true" ]] && FILE_SUFFIX="_local"
 FILE_NAME="${TARGET_DIR}/${CURRENT_DATE}${FILE_SUFFIX}.md"
@@ -223,14 +217,14 @@ if [[ "$IS_LOCAL" == "false" ]]; then
     (
         cd "$JRNL_SYNC" || exit 1
         git add .
-        
-        # 修复：使用 git status --porcelain 替代 diff-index 绕过空仓库的 HEAD 检测报错
         if [[ -n $(git status --porcelain) ]]; then
-            # 修复：直接获取本地分支名称，不再从可能为空的 origin 中猜测
             LOCAL_BRANCH=$(git branch --show-current)
+            [[ -z "$LOCAL_BRANCH" ]] && LOCAL_BRANCH="main"
+            
             git commit -m "update: $CURRENT_TIME" --quiet
-            git pull origin "$LOCAL_BRANCH" --rebase --quiet >/dev/null 2>&1
-            git push origin "$LOCAL_BRANCH" --quiet
+            # 允许首次 pull 报错（远端尚无同名分支时），随后强推建立追踪
+            git pull origin "$LOCAL_BRANCH" --rebase --quiet >/dev/null 2>&1 || true
+            git push -u origin "$LOCAL_BRANCH" --quiet >/dev/null 2>&1
         fi
     ) >/dev/null 2>&1
 fi
