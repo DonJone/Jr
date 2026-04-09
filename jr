@@ -148,7 +148,18 @@ if [[ "$IS_LOCAL" == false ]]; then
 
     # 场景：目录完全不存在（首次安装或手动删除）
     elif [ ! -d "$JRNL_SYNC" ]; then
-        gh repo clone Journal "$JRNL_SYNC" >/dev/null 2>&1 || mkdir -p "$JRNL_SYNC"
+        # 检查远程是否存在 Journal 仓库
+        if gh repo view Journal >/dev/null 2>&1; then
+            gh repo clone Journal "$JRNL_SYNC" >/dev/null 2>&1
+        else
+            # 远程不存在，自动初始化并创建私有仓库
+            mkdir -p "$JRNL_SYNC"
+            (
+                cd "$JRNL_SYNC" || exit 1
+                git init -b main
+                gh repo create Journal --private --source=. --remote=origin
+            ) >/dev/null 2>&1
+        fi
     fi
 else
     # 本地隔离模式：仅确保目录存在
@@ -156,7 +167,8 @@ else
 fi
 
 # 8. 时间与文件解析
-YEAR=$(date +'%Y'); MONTH=$(date +'%m')
+YEAR=$(date +'%Y')
+MONTH=$(date +'%m')
 CURRENT_DATE=$(date +'%Y-%m-%d'); CURRENT_TIME=$(date +'%H:%M:%S')
 TARGET_DIR="${TARGET_BASE}/${YEAR}/${MONTH}"
 FILE_NAME="${TARGET_DIR}/${CURRENT_DATE}${IS_LOCAL:+"_local"}.md"
