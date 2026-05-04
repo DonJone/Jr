@@ -1,78 +1,192 @@
 #!/bin/bash
 
 # ==========================================
-# jr 日志工具 - 卸载脚本
+# jr - Journal CLI Uninstaller v2.0.0
 # ==========================================
 
-BIN_DIR="$HOME/.local/bin"
-SCRIPT_NAME="jr"
-LOCK_FILE="/tmp/jr_sync.lock"
+set -euo pipefail
 
-# 1. 语言识别 (Language Detection)
-[[ "$LANG" =~ ^en ]] && LANG_EN=true || LANG_EN=false
+# ==========================================
+# Constants
+# ==========================================
+readonly VERSION="2.0.0"
+readonly BIN_DIR="$HOME/.local/bin"
+readonly CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/jr"
+readonly SCRIPT_NAME="jr"
+readonly TARGET="$BIN_DIR/$SCRIPT_NAME"
+readonly LOCK_FILE="/tmp/jr.lock"
 
-# 2. 国际化字符串 (i18n)
-if [ "$LANG_EN" = true ]; then
-    STR_START=">>> Preparing to uninstall jr..."
-    STR_REM_BIN="Removing binary file: $BIN_DIR/$SCRIPT_NAME"
-    STR_REM_LOCK="Cleaning up lock file: $LOCK_FILE"
-    STR_REM_PATH="Removing PATH configuration from"
-    STR_DATA_SAFE="NOTE: Your journal data in ~/Documents/ remains INTACT."
-    STR_DONE="Uninstall complete."
+# ==========================================
+# Color & Output
+# ==========================================
+if [[ -t 1 ]]; then
+    readonly BLUE='\033[0;34m'
+    readonly GREEN='\033[0;32m'
+    readonly YELLOW='\033[1;33m'
+    readonly RED='\033[0;31m'
+    readonly BOLD='\033[1m'
+    readonly DIM='\033[2m'
+    readonly NC='\033[0m'
 else
-    STR_START=">>> 正在准备卸载 jr 日志工具..."
-    STR_REM_BIN="正在移除二进制文件: $BIN_DIR/$SCRIPT_NAME"
-    STR_REM_LOCK="正在清理锁文件: $LOCK_FILE"
-    STR_REM_PATH="正在从配置文件中移除 PATH 记录:"
-    STR_DATA_SAFE="提醒：位于 ~/Documents/ 的日志数据已被保留（我们不删数据）。"
-    STR_DONE="卸载完成。"
+    readonly BLUE=''
+    readonly GREEN=''
+    readonly YELLOW=''
+    readonly RED=''
+    readonly BOLD=''
+    readonly DIM=''
+    readonly NC=''
 fi
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# ==========================================
+# Language Detection
+# ==========================================
+detect_language() {
+    [[ "${LANG:-}" =~ ^en ]] || \
+    [[ "${LC_ALL:-}" =~ ^en ]] || \
+    [[ "${LC_MESSAGES:-}" =~ ^en ]] && echo "en" || echo "zh"
+}
 
-echo -e "${BLUE}$STR_START${NC}"
+LANG_CODE=$(detect_language)
 
-# 3. 移除二进制文件
-if [ -f "$BIN_DIR/$SCRIPT_NAME" ]; then
-    rm "$BIN_DIR/$SCRIPT_NAME"
-    echo -e "${GREEN}[✓] $STR_REM_BIN${NC}"
-fi
-
-# 4. 清理锁文件
-if [ -f "$LOCK_FILE" ]; then
-    rm "$LOCK_FILE"
-    echo -e "${GREEN}[✓] $STR_REM_LOCK${NC}"
-fi
-
-# 5. 智能清理 Shell 配置文件 (PATH 移除)
-detect_rc() {
-    local current_shell=$(basename "$SHELL")
-    if [[ "$current_shell" == "zsh" ]]; then
-        echo "$HOME/.zshrc"
-    elif [[ "$current_shell" == "bash" ]]; then
-        echo "$HOME/.bashrc"
+init_i18n() {
+    if [[ "$LANG_CODE" == "en" ]]; then
+        STR_WELCOME="jr - Journal CLI Uninstaller"
+        STR_CONFIRM="This will remove jr from your system."
+        STR_CONFIRM_PROMPT="Continue? (y/n)"
+        STR_REMOVING="Removing jr..."
+        STR_REM_BIN="Removing binary"
+        STR_REM_LOCK="Removing lock file"
+        STR_REM_CONFIG="Removing configuration"
+        STR_REM_PATH="Removing PATH configuration"
+        STR_DATA_SAFE="Your journal data in ~/Documents/ is preserved."
+        STR_DONE="Uninstall complete!"
+        STR_CANCELLED="Uninstall cancelled."
+        STR_NOT_INSTALLED="jr is not installed."
     else
-        echo "$HOME/.profile"
+        STR_WELCOME="jr - 终端日志工具卸载程序"
+        STR_CONFIRM="此操作将从系统中移除 jr。"
+        STR_CONFIRM_PROMPT="是否继续？(y/n)"
+        STR_REMOVING="正在卸载 jr..."
+        STR_REM_BIN="移除主程序"
+        STR_REM_LOCK="移除锁文件"
+        STR_REM_CONFIG="移除配置文件"
+        STR_REM_PATH="移除 PATH 配置"
+        STR_DATA_SAFE="~/Documents/ 中的日志数据已保留。"
+        STR_DONE="卸载完成！"
+        STR_CANCELLED="卸载已取消。"
+        STR_NOT_INSTALLED="jr 未安装。"
     fi
 }
 
-RC_FILE=$(detect_rc)
+# ==========================================
+# Output Functions
+# ==========================================
+print_banner() {
+    echo ""
+    echo -e "${BOLD}${BLUE}┌─────────────────────────────────────────┐${NC}"
+    echo -e "${BOLD}${BLUE}│${NC}  ${BOLD}jr${NC} - Journal CLI Uninstaller         ${BOLD}${BLUE}│${NC}"
+    echo -e "${BOLD}${BLUE}└─────────────────────────────────────────┘${NC}"
+    echo ""
+}
 
-if [ -f "$RC_FILE" ]; then
-    # 使用 sed 移除包含 "jr CLI path" 的注释及其下一行 export 记录
-    # 逻辑：匹配到注释行后，连同它下面那行一起删掉
-    if grep -q "# jr CLI path" "$RC_FILE"; then
-        sed -i '/# jr CLI path/,+1d' "$RC_FILE"
-        echo -e "${GREEN}[✓] $STR_REM_PATH $RC_FILE${NC}"
+print_step() {
+    echo -e "  ${BLUE}▸${NC} $*"
+}
+
+print_success() {
+    echo -e "  ${GREEN}✓${NC} $*"
+}
+
+print_warn() {
+    echo -e "  ${YELLOW}!${NC} $*"
+}
+
+print_info() {
+    echo -e "  ${DIM}$*${NC}"
+}
+
+# ==========================================
+# Detect RC File
+# ==========================================
+detect_rc() {
+    local current_shell=$(basename "$SHELL")
+    case "$current_shell" in
+        zsh)  echo "$HOME/.zshrc" ;;
+        bash) echo "$HOME/.bashrc" ;;
+        *)    echo "$HOME/.profile" ;;
+    esac
+}
+
+# ==========================================
+# Main
+# ==========================================
+main() {
+    init_i18n
+    print_banner
+    
+    # Check if installed
+    if [[ ! -f "$TARGET" ]]; then
+        print_warn "$STR_NOT_INSTALLED"
+        exit 0
     fi
-fi
+    
+    # Confirm
+    echo -e "  $STR_CONFIRM"
+    echo -e "  ${DIM}$STR_DATA_SAFE${NC}"
+    echo ""
+    read -p "  $STR_CONFIRM_PROMPT: " -r response
+    
+    if [[ ! "$response" =~ ^[Yy] ]]; then
+        echo ""
+        print_info "$STR_CANCELLED"
+        exit 0
+    fi
+    
+    echo ""
+    print_step "$STR_REMOVING"
+    
+    # Remove binary
+    if [[ -f "$TARGET" ]]; then
+        rm -f "$TARGET"
+        print_success "$STR_REM_BIN: $TARGET"
+    fi
+    
+    # Remove lock file
+    if [[ -f "$LOCK_FILE" ]]; then
+        rm -f "$LOCK_FILE"
+        print_success "$STR_REM_LOCK: $LOCK_FILE"
+    fi
+    
+    # Remove config
+    if [[ -d "$CONFIG_DIR" ]]; then
+        rm -rf "$CONFIG_DIR"
+        print_success "$STR_REM_CONFIG: $CONFIG_DIR"
+    fi
+    
+    # Remove PATH configuration
+    local rc_file=$(detect_rc)
+    if [[ -f "$rc_file" ]] && grep -q "# jr CLI path" "$rc_file" 2>/dev/null; then
+        # Cross-platform sed -i (BSD/macOS vs Linux)
+        local os_type=$(uname -s)
+        case "$os_type" in
+            Darwin|*BSD*)
+                sed -i '' '/# jr CLI path/,+1d' "$rc_file"
+                ;;
+            *)
+                sed -i '/# jr CLI path/,+1d' "$rc_file"
+                ;;
+        esac
+        print_success "$STR_REM_PATH: $rc_file"
+    fi
+    
+    # Summary
+    echo ""
+    echo -e "${BOLD}${GREEN}┌─────────────────────────────────────────┐${NC}"
+    echo -e "${BOLD}${GREEN}│${NC}  ${GREEN}✓${NC} ${BOLD}$STR_DONE${NC}                       ${BOLD}${GREEN}│${NC}"
+    echo -e "${BOLD}${GREEN}└─────────────────────────────────────────┘${NC}"
+    echo ""
+    echo -e "  ${DIM}$STR_DATA_SAFE${NC}"
+    echo ""
+}
 
-# 6. 结束提示
-echo -e "\n${BLUE}==========================================${NC}"
-echo -e "${GREEN}$STR_DONE${NC}"
-echo -e "${RED}$STR_DATA_SAFE${NC}"
-echo -e "${BLUE}==========================================${NC}"
+main "$@"
