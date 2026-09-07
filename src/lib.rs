@@ -1,0 +1,10 @@
+pub mod completions;
+pub mod config;
+pub mod editor;
+pub mod git;
+pub mod i18n;
+pub mod journal;
+pub mod lock;
+pub mod search;
+pub mod stats;
+pub mod view;

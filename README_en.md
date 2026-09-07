@@ -3,146 +3,162 @@ English | [中文](README.md)
 # jr
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20BSD-lightgrey.svg)
-![Version](https://img.shields.io/badge/version-2.0.0-green.svg)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-green.svg)
+![Rust](https://img.shields.io/badge/built_with-Rust-orange.svg)
 
-A minimalist terminal journal for developers who think in the terminal.
+A minimalist, modern terminal journal for developers who think in the terminal.
 
-jr doesn't try to be another note-taking app. It does one thing: let you quickly log entries from the terminal, then get out of the way. Your data, Markdown format, Git sync.
+`jr` does not attempt to become another bloated note-taking app. It follows the Unix philosophy: **do one thing and do it well**.
+Record thoughts at terminal speed, preview and search directly inside the terminal without waking up a heavy editor, safely cache offline, and sync seamlessly with Git.
 
-## Design Philosophy
+---
 
-**Do one thing, and do it well.**
+## ✨ Core Features
 
-- Type and record, zero friction
-- Markdown as format, readable and portable
-- Git as sync, with conflict self-healing
-- Isolation as security, sensitive data never leaves local
+- ⚡ **Zero Friction**: Rewritten in Rust with sub-millisecond cold start. Supports instant arguments and pipe stdin.
+- 📖 **Terminal-native Reading**: Built-in `jr view`, `jr today`, `jr yesterday`, `jr tail` with colored timeline rendering.
+- 🔍 **Lightning Search & Tags**: Full-text `jr search <query>` with highlighted context; native `#tag` extraction and aggregation via `jr tags`.
+- 📊 **Streak & Dashboard**: `jr stats` displays your consecutive streak, total word count, top tags cloud, and monthly heatmap.
+- 🔄 **Resilient Sync**: Offline-first design commits locally without blocking your flow; automatically pushes when connected or via `jr sync`.
+- 🛡 **Physical Isolation**: Three-tier zones (Sync, Local Backup, Private Isolation). Sensitive data never touches the network.
+- 🧩 **Shell Autocompletions**: Native generation for Zsh, Bash, and Fish.
+- ⚙️ **Editor Freedom**: Full support for TOML config, automatic `$VISUAL` / `$EDITOR` detection, and 100% backward compatibility with legacy flags.
 
-## Installation
+---
 
+## 🚀 Installation
+
+### One-line Script
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/DonJone/jr/main/install.sh)"
 ```
 
-The script auto-detects your environment, installs dependencies, and configures PATH. If you want cloud sync, it guides you through GitHub authorization.
-
-### Dependencies
-
-| Component | Required | Description |
-|-----------|----------|-------------|
-| `git` | ✓ | Version control |
-| `curl` | ✓ | Download & install |
-| `gh` | Optional | GitHub CLI for cloud sync |
-
-## Quick Start
-
+### Build from Source
 ```bash
-# Record a journal entry
-jr "Refactored the auth module today"
+git clone https://github.com/DonJone/jr.git
+cd jr
+cargo install --path .
+```
 
-# Open today's journal in editor
-jr -c
+---
 
-# Record to local backup only (no cloud sync)
+## 📖 Quick Start
+
+### 1. Recording
+```bash
+# Record to sync zone + local backup
+jr "Refactored auth module today #rust #dev"
+
+# Pipe output from commands
+echo "Daily build completed" | jr
+
+# Record to local backup only
 jr -l "Local debugging notes"
 
-# Record to private zone (never uploaded)
-jr -p "Server password: xxx"
-
-# Read from pipe
-echo "Script output" | jr
-
-# Check status
-jr --status
+# Record to private zone (isolated, never uploaded)
+jr -p "Server staging password: abc-123"
 ```
 
-## Directory Structure
-
-```
-~/Documents/
-├── Journal/              # Sync zone → GitHub
-│   └── 2026/05/
-│       └── 2026-05-04.md
-├── Journal_local/        # Local backup (syncs when online)
-│   └── 2026/05/
-│       └── 2026-05-04_local.md
-└── Journal_private/      # Private zone (never uploaded)
-    └── 2026/05/
-        └── 2026-05-04_private.md
-```
-
-## Usage
-
-```
-jr [options] [content]
-
-Recording modes:
-  "content"               Record to sync + local backup
-  -l, --local "content"   Record to local backup only
-  -p, --private "content" Record to private zone (never uploaded)
-
-Editors:
-  -c, --code              VS Code
-  -g, --gnome             GNOME Text Editor
-  -k, --kde               Kate
-  -m, --macos             macOS TextEdit
-  -e, --edit              $EDITOR or system default
-  -x, --xdg               xdg-open (Linux)
-
-Management:
-  --login                 GitHub login
-  --status                Show status
-  -q, --quiet             Quiet mode
-  -v, --verbose           Verbose mode
-  -V, --version           Version info
-  -h, --help              Help
-```
-
-## Configuration
-
-Config file: `~/.config/jr/config`
-
+### 2. Reading in Terminal
 ```bash
-# Custom directory paths
-sync_dir="$HOME/Documents/Journal"
-local_dir="$HOME/Documents/Journal_local"
-private_dir="$HOME/Documents/Journal_private"
+# View today's entries
+jr view
+
+# View yesterday's entries
+jr yesterday
+
+# View a specific date
+jr date 2026-05-04
+
+# View the last 5 entries
+jr tail 5
+
+# List recent journal files
+jr list
 ```
 
-## Platform Support
+### 3. Searching & Tags
+```bash
+# Full-text search with highlights
+jr search "auth module"
 
-| Platform | Status |
-|----------|--------|
-| Linux (Ubuntu/Debian/Fedora/Arch) | ✓ |
-| macOS | ✓ |
-| FreeBSD | ✓ |
-| OpenBSD | ✓ |
-| NetBSD | ✓ |
-| DragonFlyBSD | ✓ |
+# View all tags and frequencies
+jr tags
 
-## Design Decisions
+# Filter entries by tag
+jr tag rust
+```
 
-**Why Markdown?**
-Plain text, grep-able, Git-diff-able, opens in any editor. Your journal will be readable in ten years.
+### 4. Stats & Dashboard
+```bash
+jr stats
+```
 
-**Why Git sync?**
-Conflict resolution is a solved problem. Don't reinvent the wheel—use Git's rebase strategy for multi-device sync.
+### 5. Sync & Status
+```bash
+# Check status and pending commits
+jr status
 
-**Why a private zone?**
-Passwords, tokens, and personal notes shouldn't be in Git history. Physical isolation is the only real isolation.
+# Trigger full bidirectional sync
+jr sync
 
-**Why gh?**
-GitHub CLI handles OAuth and repository operations. More secure than hand-written tokens, simpler than SSH config.
+# Authenticate with GitHub
+jr login
+```
 
-## Uninstall
+### 6. External Editors
+```bash
+# Open today's journal in $EDITOR
+jr -e
+
+# Open in VS Code
+jr -c
+```
+
+---
+
+## ⚙️ Configuration
+
+Config file: `~/.config/jr/config.toml` (also backwards-compatible with legacy `~/.config/jr/config`)
+
+```toml
+sync_dir = "~/Documents/Journal"
+local_dir = "~/Documents/Journal_local"
+private_dir = "~/Documents/Journal_private"
+editor = "nvim"
+auto_sync = true
+```
+
+---
+
+## 🐚 Completions
+
+Generate shell completions:
+```bash
+# Zsh
+jr completions zsh > ~/.zsh/completions/_jr
+
+# Bash
+jr completions bash > ~/.bash_completion.d/jr
+
+# Fish
+jr completions fish > ~/.config/fish/completions/jr.fish
+```
+
+---
+
+## 🗑️ Uninstallation
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/DonJone/jr/main/uninstall.sh)"
 ```
 
-Uninstalling does not delete your journal data.
+> [!NOTE]
+> Uninstallation removes the executable and configurations only. Your journal files in `~/Documents/` are **never deleted**.
 
-## License
+---
+
+## 📄 License
 
 [AGPL-3.0](LICENSE)

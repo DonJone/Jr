@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# jr - Journal CLI Uninstaller v2.0.0
+# jr - Journal CLI Uninstaller v3.0.0
 # ==========================================
 
 set -euo pipefail
@@ -9,12 +9,10 @@ set -euo pipefail
 # ==========================================
 # Constants
 # ==========================================
-readonly VERSION="2.0.0"
+readonly VERSION="3.0.0"
 readonly BIN_DIR="$HOME/.local/bin"
 readonly CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/jr"
-readonly SCRIPT_NAME="jr"
-readonly TARGET="$BIN_DIR/$SCRIPT_NAME"
-readonly LOCK_FILE="/tmp/jr.lock"
+readonly TARGET="$BIN_DIR/jr"
 
 # ==========================================
 # Color & Output
@@ -55,8 +53,8 @@ init_i18n() {
         STR_CONFIRM_PROMPT="Continue? (y/n)"
         STR_REMOVING="Removing jr..."
         STR_REM_BIN="Removing binary"
-        STR_REM_LOCK="Removing lock file"
         STR_REM_CONFIG="Removing configuration"
+        STR_REM_COMPLETIONS="Removing shell completions"
         STR_REM_PATH="Removing PATH configuration"
         STR_DATA_SAFE="Your journal data in ~/Documents/ is preserved."
         STR_DONE="Uninstall complete!"
@@ -68,8 +66,8 @@ init_i18n() {
         STR_CONFIRM_PROMPT="是否继续？(y/n)"
         STR_REMOVING="正在卸载 jr..."
         STR_REM_BIN="移除主程序"
-        STR_REM_LOCK="移除锁文件"
         STR_REM_CONFIG="移除配置文件"
+        STR_REM_COMPLETIONS="移除 Shell 补全脚本"
         STR_REM_PATH="移除 PATH 配置"
         STR_DATA_SAFE="~/Documents/ 中的日志数据已保留。"
         STR_DONE="卸载完成！"
@@ -78,36 +76,19 @@ init_i18n() {
     fi
 }
 
-# ==========================================
-# Output Functions
-# ==========================================
 print_banner() {
     echo ""
     echo -e "${BOLD}${BLUE}┌─────────────────────────────────────────┐${NC}"
-    echo -e "${BOLD}${BLUE}│${NC}  ${BOLD}jr${NC} - Journal CLI Uninstaller         ${BOLD}${BLUE}│${NC}"
+    echo -e "${BOLD}${BLUE}│${NC}  ${BOLD}jr${NC} - Journal CLI Uninstaller ${DIM}v${VERSION}${NC}  ${BOLD}${BLUE}│${NC}"
     echo -e "${BOLD}${BLUE}└─────────────────────────────────────────┘${NC}"
     echo ""
 }
 
-print_step() {
-    echo -e "  ${BLUE}▸${NC} $*"
-}
+print_step() { echo -e "  ${BLUE}▸${NC} $*"; }
+print_success() { echo -e "  ${GREEN}✓${NC} $*"; }
+print_warn() { echo -e "  ${YELLOW}!${NC} $*"; }
+print_info() { echo -e "  ${DIM}$*${NC}"; }
 
-print_success() {
-    echo -e "  ${GREEN}✓${NC} $*"
-}
-
-print_warn() {
-    echo -e "  ${YELLOW}!${NC} $*"
-}
-
-print_info() {
-    echo -e "  ${DIM}$*${NC}"
-}
-
-# ==========================================
-# Detect RC File
-# ==========================================
 detect_rc() {
     local current_shell=$(basename "$SHELL")
     case "$current_shell" in
@@ -117,56 +98,50 @@ detect_rc() {
     esac
 }
 
-# ==========================================
-# Main
-# ==========================================
 main() {
     init_i18n
     print_banner
-    
-    # Check if installed
+
     if [[ ! -f "$TARGET" ]]; then
         print_warn "$STR_NOT_INSTALLED"
         exit 0
     fi
-    
-    # Confirm
+
     echo -e "  $STR_CONFIRM"
     echo -e "  ${DIM}$STR_DATA_SAFE${NC}"
     echo ""
     read -p "  $STR_CONFIRM_PROMPT: " -r response
-    
+
     if [[ ! "$response" =~ ^[Yy] ]]; then
         echo ""
         print_info "$STR_CANCELLED"
         exit 0
     fi
-    
+
     echo ""
     print_step "$STR_REMOVING"
-    
+
     # Remove binary
     if [[ -f "$TARGET" ]]; then
         rm -f "$TARGET"
         print_success "$STR_REM_BIN: $TARGET"
     fi
-    
-    # Remove lock file
-    if [[ -f "$LOCK_FILE" ]]; then
-        rm -f "$LOCK_FILE"
-        print_success "$STR_REM_LOCK: $LOCK_FILE"
-    fi
-    
+
     # Remove config
     if [[ -d "$CONFIG_DIR" ]]; then
         rm -rf "$CONFIG_DIR"
         print_success "$STR_REM_CONFIG: $CONFIG_DIR"
     fi
-    
+
+    # Remove completions
+    rm -f "$HOME/.zsh/completions/_jr" 2>/dev/null || true
+    rm -f "$HOME/.bash_completion.d/jr" 2>/dev/null || true
+    rm -f "$HOME/.config/fish/completions/jr.fish" 2>/dev/null || true
+    print_success "$STR_REM_COMPLETIONS"
+
     # Remove PATH configuration
     local rc_file=$(detect_rc)
     if [[ -f "$rc_file" ]] && grep -q "# jr CLI path" "$rc_file" 2>/dev/null; then
-        # Cross-platform sed -i (BSD/macOS vs Linux)
         local os_type=$(uname -s)
         case "$os_type" in
             Darwin|*BSD*)
@@ -178,7 +153,7 @@ main() {
         esac
         print_success "$STR_REM_PATH: $rc_file"
     fi
-    
+
     # Summary
     echo ""
     echo -e "${BOLD}${GREEN}┌─────────────────────────────────────────┐${NC}"
