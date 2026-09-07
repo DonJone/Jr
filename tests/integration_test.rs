@@ -44,6 +44,7 @@ fn test_write_and_parse_journal_entries() {
         private_dir: tmp.path().join("Journal_private"),
         editor: None,
         auto_sync: false,
+        background_sync: false,
     };
 
     let note1 = "First entry for the day #test";
@@ -75,6 +76,7 @@ fn test_private_isolation() {
         private_dir: tmp.path().join("Journal_private"),
         editor: None,
         auto_sync: false,
+        background_sync: false,
     };
 
     let secret = "Super secret password: 123456";

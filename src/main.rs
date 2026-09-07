@@ -155,6 +155,10 @@ enum Commands {
     /// Check and upgrade jr to the latest release
     #[command(alias = "update")]
     Upgrade,
+
+    /// Internal background worker command
+    #[command(name = "__bg_sync", hide = true)]
+    BgSync,
 }
 
 fn determine_zone(local: bool, private: bool) -> Result<Zone, &'static str> {
@@ -269,7 +273,29 @@ fn show_status(config: &Config, lang: Language) {
             );
         }
     }
+
+    if let Some(last_sync) = git::get_last_sync_info(&Config::config_dir()) {
+        println!("{}: {}", if is_en { "Last sync log" } else { "最近同步记录" }, last_sync.dimmed());
+    }
     println!();
+}
+
+fn spawn_background_sync() {
+    if let Ok(exe) = std::env::current_exe() {
+        let mut cmd = std::process::Command::new(exe);
+        cmd.arg("__bg_sync")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+
+        let _ = cmd.spawn();
+    }
 }
 
 fn main() {
@@ -419,6 +445,10 @@ fn main() {
                 println!("{}", if is_en { "Run: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/DonJone/jr/main/install.sh)\"" } else { "升级命令：/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/DonJone/jr/main/install.sh)\"" }.bold());
                 return;
             }
+            Commands::BgSync => {
+                git::run_background_sync(&config.sync_dir, &Config::config_dir());
+                return;
+            }
         }
     }
 
@@ -449,15 +479,6 @@ fn main() {
         return;
     }
 
-    // Acquire lock for recording / sync operations
-    let _lock = match JrLock::acquire() {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("{}", e.red());
-            process::exit(75);
-        }
-    };
-
     // Read content from args or stdin
     let mut text_to_record = cli.content.join(" ");
     if text_to_record.is_empty() && !io::stdin().is_terminal() {
@@ -480,33 +501,48 @@ fn main() {
         let _ = git::init_sync_repo(&config.sync_dir);
     }
 
-    // Record entry
-    match write_entry(&text_to_record, zone, &config, is_en) {
-        Ok(saved_path) => {
-            if !cli.quiet {
-                let zone_name = if is_en { zone.name_en() } else { zone.name_zh() };
-                let success_msg = if is_en {
-                    format!("Saved to {}.", zone_name)
-                } else {
-                    format!("已保存至 {}。", zone_name)
-                };
-                println!("{}", success_msg.green());
-                if cli.verbose {
-                    println!("{} {}", "File:".dimmed(), saved_path.display());
+    // Scoped lock strictly during file write to release instantly
+    {
+        let _lock = match JrLock::acquire() {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("{}", e.red());
+                process::exit(75);
+            }
+        };
+
+        match write_entry(&text_to_record, zone, &config, is_en) {
+            Ok(saved_path) => {
+                if !cli.quiet {
+                    let zone_name = if is_en { zone.name_en() } else { zone.name_zh() };
+                    let success_msg = if is_en {
+                        format!("Saved to {}.", zone_name)
+                    } else {
+                        format!("已保存至 {}。", zone_name)
+                    };
+                    println!("{}", success_msg.green());
+                    if cli.verbose {
+                        println!("{} {}", "File:".dimmed(), saved_path.display());
+                    }
                 }
             }
+            Err(e) => {
+                eprintln!("{}: {}", if is_en { "Failed to write journal" } else { "写入日志失败" }.red(), e);
+                process::exit(73);
+            }
         }
-        Err(e) => {
-            eprintln!("{}: {}", if is_en { "Failed to write journal" } else { "写入日志失败" }.red(), e);
-            process::exit(73);
-        }
+        // _lock drops here!
     }
 
-    // Auto sync
+    // Auto sync (non-blocking in background by default)
     if zone == Zone::Sync && config.auto_sync {
-        let sync_res = git::sync_repo(&config.sync_dir);
-        if cli.verbose {
-            println!("{:?}", sync_res);
+        if config.background_sync {
+            spawn_background_sync();
+        } else {
+            let sync_res = git::sync_repo(&config.sync_dir);
+            if cli.verbose {
+                println!("{:?}", sync_res);
+            }
         }
     }
 }

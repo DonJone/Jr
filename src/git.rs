@@ -1,6 +1,11 @@
 use chrono::Local;
-use std::path::Path;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::os::unix::io::AsRawFd;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SyncStatus {
@@ -271,5 +276,82 @@ pub fn sync_repo(repo_dir: &Path) -> SyncStatus {
         SyncStatus::OfflinePending
     } else {
         SyncStatus::OfflinePending
+    }
+}
+
+pub fn sync_log_path(config_dir: &Path) -> PathBuf {
+    config_dir.join("sync.log")
+}
+
+pub fn get_last_sync_info(config_dir: &Path) -> Option<String> {
+    let log_file = sync_log_path(config_dir);
+    if log_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(&log_file) {
+            if let Some(last_line) = content.lines().rev().find(|l| !l.trim().is_empty()) {
+                return Some(last_line.to_string());
+            }
+        }
+    }
+    None
+}
+
+pub fn run_background_sync(sync_dir: &Path, config_dir: &Path) {
+    if !is_git_repo(sync_dir) {
+        return;
+    }
+
+    // Acquire background sync lock to avoid overlapping sync workers
+    let uid = unsafe { libc::getuid() };
+    let lock_dir = dirs::runtime_dir().unwrap_or_else(std::env::temp_dir);
+    let lock_path = lock_dir.join(format!("jr-sync-{}.lock", uid));
+
+    let lock_file = match OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+    {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+
+    let fd = lock_file.as_raw_fd();
+    let mut acquired = false;
+    // Wait up to 10 seconds (100 * 100ms) if an existing sync process is about to finish
+    for _ in 0..100 {
+        let ret = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
+        if ret == 0 {
+            acquired = true;
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    if !acquired {
+        return;
+    }
+
+    let status = sync_repo(sync_dir);
+
+    // Release sync lock
+    unsafe {
+        libc::flock(fd, libc::LOCK_UN);
+    }
+    let _ = std::fs::remove_file(&lock_path);
+
+    // Record last sync result to log
+    let log_file = sync_log_path(config_dir);
+    let time_str = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let status_str = match status {
+        SyncStatus::Synced => "Synced (OK)".to_string(),
+        SyncStatus::OfflinePending => "Offline (Pending)".to_string(),
+        SyncStatus::NoChanges => "No Changes".to_string(),
+        SyncStatus::GitNotConfigured => "Git User Not Configured".to_string(),
+        SyncStatus::Error(e) => format!("Error: {}", e),
+    };
+
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_file) {
+        let _ = writeln!(f, "[{}] {}", time_str, status_str);
     }
 }

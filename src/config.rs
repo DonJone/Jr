@@ -19,6 +19,9 @@ pub struct Config {
 
     #[serde(default = "default_auto_sync")]
     pub auto_sync: bool,
+
+    #[serde(default = "default_background_sync")]
+    pub background_sync: bool,
 }
 
 fn home_dir() -> PathBuf {
@@ -41,6 +44,10 @@ fn default_auto_sync() -> bool {
     true
 }
 
+fn default_background_sync() -> bool {
+    true
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -49,6 +56,7 @@ impl Default for Config {
             private_dir: default_private_dir(),
             editor: None,
             auto_sync: true,
+            background_sync: true,
         }
     }
 }
@@ -113,6 +121,7 @@ impl Config {
                                 "private_dir" => config.private_dir = PathBuf::from(val),
                                 "editor" => config.editor = Some(val.to_string()),
                                 "auto_sync" => config.auto_sync = val != "false" && val != "0",
+                                "background_sync" => config.background_sync = val != "false" && val != "0",
                                 _ => {}
                             }
                         }
@@ -156,6 +165,7 @@ impl Config {
 # private_dir = "~/Documents/Journal_private"
 # editor = "nvim" # or "code", "nano", "vim", etc.
 # auto_sync = true
+# background_sync = true # Sync in background without blocking CLI prompt
 "#;
             fs::write(toml_file, default_toml)?;
         }

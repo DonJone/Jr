@@ -123,9 +123,9 @@ Disk files adhere to deterministic hierarchical addressing:
 * Local Zone suffix: `"_local"` (e.g., `2026-09-07_local.md`)
 * Private Zone suffix: `"_private"` (e.g., `2026-09-07_private.md`)
 
-### 2.2 Offline-First Synchronization State Machine
+### 2.2 Offline-First and Non-Blocking Background Synchronization
 
-The synchronization lifecycle decouples local append latency from remote transport availability:
+The synchronization lifecycle decouples local append latency from remote transport availability via asynchronous, non-blocking process dispatch: entries are committed and unlocked within sub-milliseconds in the foreground, while a detached background child process asynchronously carries out upstream Git negotiations:
 
 ```mermaid
 stateDiagram-v2
@@ -288,8 +288,11 @@ private_dir = "~/Documents/Journal_private"
 # Preferred editor command (e.g., "nvim", "code --wait", "helix")
 editor = "nvim"
 
-# Automatically trigger background Git sync following append operations
+# Automatically trigger Git sync following append operations
 auto_sync = true
+
+# Dispatch Git sync in a detached background process (instant foreground exit)
+background_sync = true
 ```
 
 ---

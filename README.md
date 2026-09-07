@@ -123,9 +123,9 @@ flowchart TD
 * 本地备份区后缀：`_local`（例如 `2026-09-07_local.md`）
 * 物理隔离区后缀：`_private`（例如 `2026-09-07_private.md`）
 
-### 2.2 离线同步状态机模型
+### 2.2 离线同步与非阻塞后台状态机模型
 
-系统引入离线优先（Offline-First）容错机制，将写入流程与网络状态解耦：
+系统引入离线优先（Offline-First）与**非阻塞异步后台同步（Non-Blocking Background Sync）**机制：前台记录在亚毫秒级完成文件写入并即刻解除顾问锁，随即调度独立的子进程在后台执行 Git 状态同步，彻底消除远程网络 I/O 延迟对前台键入心流的阻断；若遭遇网络中断，自动优雅降级为本地暂存状态：
 
 ```mermaid
 stateDiagram-v2
@@ -302,8 +302,11 @@ private_dir = "~/Documents/Journal_private"
 # 首选编辑器命令 (支持参数指定，例如 "code --wait", "nvim")
 editor = "nvim"
 
-# 是否在成功写入后自动异步触发 Git 状态同步
+# 是否在成功写入后自动触发 Git 状态同步
 auto_sync = true
+
+# 是否启用非阻塞后台异步同步（默认启用：前台秒级返回，网络与 Git 在后台静默运行）
+background_sync = true
 ```
 
 ---
