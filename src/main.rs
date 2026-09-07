@@ -289,9 +289,12 @@ fn spawn_background_sync() {
             .stderr(std::process::Stdio::null());
 
         #[cfg(unix)]
-        {
+        unsafe {
             use std::os::unix::process::CommandExt;
-            cmd.process_group(0);
+            cmd.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
         }
 
         let _ = cmd.spawn();
